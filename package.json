@@ -6,6 +6,8 @@
   "license": "See LICENSE file",
   "homepage": "https://github.com/lhedinger/chai-gangster#readme",
   "main": "lib/index.js",
+  "type": "module",
+  "module": "lib",
   "scripts": {
     "pre-push": "npm run lint:fix && npm run test",
     "pre-publish": "TODO",
@@ -13,7 +15,7 @@
     "lint:default": "npx eslint",
     "lint:fix": "npx eslint --fix -- lib/",
     "test": "npm run test:unit",
-    "test:unit": "mocha --config mocha.js",
+    "test:unit": "mocha --config mocha.cjs",
     "package": "TODO",
     "publish": "TODO"
   },
@@ -30,24 +32,18 @@
     "mocha": "^10.0.0",
     "mockttp": "^3.9.4",
     "node-fetch": "^2.6.0",
-    "opossum": "7.1.0",
     "qs": "6.11.0",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "eslint": "^8.34.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-prettier": "^4.2.1",
     "express": "4.18.2",
     "express-async-handler": "1.2.0",
-    "eslint": "8.34.0",
-    "eslint-config-prettier": "^8.5.0",
-    "eslint-plugin-no-only-tests": "^3.0.0",
-    "eslint-plugin-node": "11.1.0",
-    "eslint-plugin-prettier": "^4.2.1",
-    "eslint-plugin-promise": "6.0.0",
-    "eslint-plugin-sonarjs": "0.11.0",
     "faker": "^5.5.3",
     "jwt-encode": "^1.0.1",
-    "nyc": "^15.1.0",
-    "prettier": "^2.7.1",
     "prettier-eslint": "^13.0.0"
   },
   "repository": {

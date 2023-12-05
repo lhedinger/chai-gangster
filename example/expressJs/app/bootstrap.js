@@ -1,5 +1,5 @@
-const express = require("express");
-const { buildRoutes } = require("./helloWorldApp");
+import express from 'express';
+import { buildRoutes } from './helloWorldApp.js';
 
 function bootstrap() {
   const app = express();
@@ -13,4 +13,4 @@ function addRoutes(app) {
   app.use(router);
 }
 
-module.exports = bootstrap;
+export default bootstrap;
