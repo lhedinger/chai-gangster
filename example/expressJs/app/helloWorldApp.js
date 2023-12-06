@@ -35,6 +35,29 @@ export function buildRoutes(router) {
       );
     })
   );
+  router.get(
+    '/advanced-downstream2',
+    asyncHandler(async (req, res) => {
+      const response1 = await callPostExample(
+        'http://example.com/api/getfood',
+        {
+          type: 'fruit',
+        }
+      );
+      const response2 = await callPostExample(
+        'http://example.com/api/getfood',
+        {
+          type: 'vegetable',
+        }
+      );
+      res.send(
+        JSON.stringify({
+          fruit: response1.food,
+          vegetable: response2.food,
+        })
+      );
+    })
+  );
 }
 
 async function callGetExample(url) {

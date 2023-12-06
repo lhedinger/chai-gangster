@@ -8,7 +8,7 @@ describe('Advanced Component Test', () => {
   beforeEach(async () => await setup());
   afterEach(async () => await teardown());
 
-  it('return value from application server', async () => {
+  it('expect value from first call to be passed to second call', async () => {
     const expectedResponseBody = {
       status: 'running',
       id: 1234,
@@ -23,6 +23,25 @@ describe('Advanced Component Test', () => {
         restStub
           .post(200, 'http://some-db.com/api/store', { id: 1234 })
           .expect({ value: 'running' }, { 'content-type': 'application/json' }),
+      ])
+      .run();
+  });
+
+  it('expect behavior to be different based on body', async () => {
+    const expectedResponseBody = {
+      fruit: 'apple',
+      vegetable: 'carrot',
+    };
+    await gangster
+      .get('/advanced-downstream2', { 'Content-Type': 'application/json' })
+      .response(200, expectedResponseBody, {})
+      .stub([
+        restStub
+          .post(200, 'http://example.com/api/getfood', { food: 'apple' })
+          .when({ type: 'fruit' }, { 'Content-Type': 'application/json' }),
+        restStub
+          .post(200, 'http://example.com/api/getfood', { food: 'carrot' })
+          .when({ type: 'vegetable' }, { 'Content-Type': 'application/json' }),
       ])
       .run();
   });
