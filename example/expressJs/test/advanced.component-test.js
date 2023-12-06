@@ -10,17 +10,19 @@ describe('Advanced Component Test', () => {
 
   it('return value from application server', async () => {
     const expectedResponseBody = {
-      status: 'up',
+      status: 'running',
       id: 1234,
     };
     await gangster
       .get('/advanced-downstream', { 'Content-Type': 'application/json' })
       .response(200, expectedResponseBody, {})
       .stub([
-        restStub.get(200, 'http://example.com/api/status', { status: 'up' }),
+        restStub.get(200, 'http://example.com/api/isalive', {
+          status: 'running',
+        }),
         restStub
           .post(200, 'http://some-db.com/api/store', { id: 1234 })
-          .expect({ a: 1 }, { 'content-type': 'application/json' }),
+          .expect({ value: 'running' }, { 'content-type': 'application/json' }),
       ])
       .run();
   });

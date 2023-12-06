@@ -23,9 +23,9 @@ export function buildRoutes(router) {
   router.get(
     '/advanced-downstream',
     asyncHandler(async (req, res) => {
-      const response1 = await callGetExample('http://example.com/api/status');
+      const response1 = await callGetExample('http://example.com/api/isalive');
       const response2 = await callPostExample('http://some-db.com/api/store', {
-        status: response1,
+        value: response1.status,
       });
       res.send(
         JSON.stringify({
