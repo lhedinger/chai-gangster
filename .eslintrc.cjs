@@ -26,7 +26,7 @@ module.exports = {
     'node/no-unpublished-import': [
       'error',
       {
-        allowModules: ['chai', 'express'],
+        allowModules: ['chai', 'express', 'express-async-handler'],
       },
     ],
     quotes: ['error', 'single'],
