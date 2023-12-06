@@ -24,7 +24,7 @@ Please see the [example](example) folder for different use-cases.
 
 ## Setup
 
-In order to Gangster to work, you need to be able to run the application locally by invoking it with a js/ts function call.
+In order for Gangster to work, you need to be able to run the application locally by invoking it with a js/ts function call.
 For a simple example with ExpressJS, see [example/expressJs/test](example/expressJs/test/basic.component-test.js).
 
 Any outbound connections (REST, HTTP, ...) need to be proxied over localhost.
@@ -62,7 +62,7 @@ beforeEach(async () => await gangster.setup());
 afterEach(async () => await gangster.teardown());
 
 // your first test case
-it("return value from application server", async () => {
+it("returns 'hello world' from application server", async () => {
     const expectedResponseBody = {
       status: "Hello World",
     };
@@ -76,12 +76,40 @@ it("return value from application server", async () => {
 });
 ```
 
-Please note that you can move the `before()` and `after()` into the config file 
+Please note that you can move the `before()` and `after()` into the config file
 to reduce the amount of boilerplate for each test suite.
+
+
+### Using Stubs
+
+In the above example, the `/hello` endpoint under test did not rely on any external systems.
+Most likely your application would call a downstream system via, for example, a REST API.
+
+In this example we will test the application's `/call-downstream-api` endpoint.
+The logic behind this endpoint was defined to always call `example.com/api` and pass-through the response.
+
+To cover this behavior we will need to write the test using **stubs**:
+
+```javascript
+// ...
+
+it("returns string value from downstream", async () => {
+  const expectedResponseString = 'Bonjourno';
+  await gangster
+    .get('/call-downstream-api')
+    .response(200, expectedResponseString, {})
+    .stub([
+      // We will define the stubbed api to always return the same thing
+      restStub.get(200, 'example.com/api', 'Bonjourno')
+    ])
+    .run();
+});
+```
+
 
 ## Gangster API
 
-### invoke / get / put / post / delete
+### invoke / get / put / post / delete / options
 
 These functions define the starting point of the test.
 They call an endpoint of the application under test.
@@ -94,7 +122,6 @@ If the response does not match the provided values, then that test case will fai
 ### stub()
 
 This defines a list of endpoints or dependencies you need to mock.
-Note that by default unmocked endpoints will return a 418 (I'm a teapot).
 
 ## Stubs
 
@@ -105,8 +132,9 @@ They
 
 The most commonly used.
 This stub allows you to define mocked endpoints that the application will call.
+Note that by default unmocked endpoints will return a 418 (I'm a teapot).
 
-Supports the functions `get()`, `post()`, `put()`, `delete()`.
+Supports the functions `get()`, `post()`, `put()`, `delete()`, `options()`
 
 ### dateStub
 

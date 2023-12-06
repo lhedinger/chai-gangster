@@ -2,7 +2,7 @@ import { setup, teardown, gangster, stubs } from '../../../lib/index.js';
 import { startAppServer, stopAppServer } from '../app/bootstrap.js';
 
 const restStub = stubs.restStub;
-describe('Basic Component Test', () => {
+describe('Advanced Component Test', () => {
   before(async () => await startAppServer());
   after(async () => await stopAppServer());
   beforeEach(async () => await setup());
@@ -10,20 +10,18 @@ describe('Basic Component Test', () => {
 
   it('return value from application server', async () => {
     const expectedResponseBody = {
-      status: 'Hello World',
+      status: 'up',
+      id: 1234,
     };
     await gangster
-      .get('/hello', { 'Content-Type': 'application/json' })
+      .get('/advanced-downstream', { 'Content-Type': 'application/json' })
       .response(200, expectedResponseBody, {})
-      .stub([])
-      .run();
-  });
-  it('return the value from downstream rest api', async () => {
-    const expectedResponseBody = { status: 'Bonjourno' };
-    await gangster
-      .get('/downstream', { 'Content-Type': 'application/json' })
-      .response(200, expectedResponseBody, {})
-      .stub([restStub.get(200, '/api/sayhello', { word: 'Bonjourno' })])
+      .stub([
+        restStub.get(200, 'http://example.com/api/status', { status: 'up' }),
+        restStub
+          .post(200, 'http://some-db.com/api/store', { id: 1234 })
+          .expect({ a: 1 }, { 'content-type': 'application/json' }),
+      ])
       .run();
   });
 });

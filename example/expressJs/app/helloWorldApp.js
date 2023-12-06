@@ -14,14 +14,39 @@ export function buildRoutes(router) {
   router.get(
     '/downstream',
     asyncHandler(async (req, res) => {
-      const response = await callAnApi();
-      res.send(response);
+      const response = await callGetExample('http://example.com/api/sayhello');
+      res.send({
+        status: response.word,
+      });
+    })
+  );
+  router.get(
+    '/advanced-downstream',
+    asyncHandler(async (req, res) => {
+      const response1 = await callGetExample('http://example.com/api/status');
+      const response2 = await callPostExample('http://some-db.com/api/store', {
+        status: response1,
+      });
+      res.send(
+        JSON.stringify({
+          status: response1.status,
+          id: response2.id,
+        })
+      );
     })
   );
 }
 
-async function callAnApi() {
-  const url = 'http://example.com/api';
+async function callGetExample(url) {
   const response = await fetch(url);
-  return await response.text();
+  return await response.json();
+}
+
+async function callPostExample(url, body) {
+  const response = await fetch(url, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return await response.json();
 }
