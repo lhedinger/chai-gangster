@@ -57,8 +57,8 @@ Tests are defined using a fluent (method-chaining) builder that follows the
 #### Phase 1: Given (Downstream Dependencies)
 
 Provide an array of downstream dependencies representing the AUT's external
-services. This phase is optional — omit it when the AUT endpoint has no
-downstream calls.
+services. This phase is required — pass an empty array when the AUT endpoint
+has no downstream calls.
 
 | Builder Method          | Description                                       |
 |-------------------------|---------------------------------------------------|
@@ -414,6 +414,7 @@ describe('My Component Test', () => {
 
   it('works without downstreams', async () => {
     await gangster
+      .given([])
       .get('/health')
       .expectResponse(200, { status: 'ok' })
       .run();

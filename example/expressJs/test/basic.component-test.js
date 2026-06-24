@@ -19,6 +19,7 @@ describe('Basic Component Test', () => {
 
   it('return value from application server', async () => {
     await gangster
+      .given([])
       .get('/hello', { 'Content-Type': 'application/json' })
       .expectResponse(200, { status: 'Hello World' })
       .run();
