@@ -7,9 +7,9 @@
 Gangster is a black-box component test framework for HTTP-based applications. It
 tests an application by starting it locally, intercepting its outbound HTTP calls
 via a proxy, and routing them to a built-in mock server. The test author
-describes the entire request-response cycle declaratively: what to send to the
-application, what the application's downstream dependencies should return, and
-what the final response should look like.
+describes the entire request-response cycle declaratively: what the application's
+downstream dependencies should return, what to send to the application, and what
+the final response should look like.
 
 ### 1.2 Core Concepts
 
@@ -23,9 +23,10 @@ domain and port.
 #### Mock Server
 
 A local HTTP proxy server intercepts all outbound requests made by the AUT. The
-test author registers "stubs" that define what each intercepted endpoint should
-return. Any request that does not match a registered stub receives a
-`418 I'm a Teapot` response with the body `"This endpoint was not mocked"`.
+test author registers downstream dependencies that define what each intercepted
+endpoint should return. Any request that does not match a registered downstream
+receives a `418 I'm a Teapot` response with the body
+`"This endpoint was not mocked"`.
 
 #### Test Lifecycle
 
@@ -34,21 +35,36 @@ Each test follows this lifecycle:
 1. **Setup** - Start the mock server and configure the HTTP proxy so the AUT's
    outbound traffic is routed through it. Requests to the AUT's own
    host/port are excluded from proxying.
-2. **Define** - Declare the test using the builder API: the request to send,
-   the stubs for downstream dependencies, and the expected response.
-3. **Run** - Initialize all stubs on the mock server, send the HTTP request to
-   the AUT, collect stub call data, and run assertions.
-4. **Teardown** - Stop the mock server and reset all stubs.
+2. **Define** - Declare the test using the builder API: the downstream
+   dependencies, the request to send, and the expected response.
+3. **Run** - Initialize all downstreams on the mock server, send the HTTP
+   request to the AUT, collect call data, and run assertions.
+4. **Teardown** - Stop the mock server and reset all downstreams.
 
 A typical test suite calls setup/teardown around each individual test case so
-that stubs do not leak between tests.
+that downstreams do not leak between tests.
 
 ### 1.3 Builder API
 
-Tests are defined using a fluent (method-chaining) builder. The builder has
-four phases that must be called in order:
+Tests are defined using a fluent (method-chaining) builder that follows the
+**Given / When / Then** pattern:
 
-#### Phase 1: Request
+1. **Given** — declare the downstream dependencies (what the AUT's external
+   services return)
+2. **When** — define the HTTP request to send to the AUT
+3. **Then** — define the expected response from the AUT
+
+#### Phase 1: Given (Downstream Dependencies)
+
+Provide an array of downstream dependencies representing the AUT's external
+services. This phase is optional — omit it when the AUT endpoint has no
+downstream calls.
+
+| Builder Method          | Description                                       |
+|-------------------------|---------------------------------------------------|
+| `given(downstreams[])`  | Register downstream dependencies for the test     |
+
+#### Phase 2: When (Request)
 
 Define the HTTP request to send to the AUT.
 
@@ -71,14 +87,14 @@ underlying HTTP client as structured auth.
 **Form encoding**: If the request headers contain a `Content-Type` of
 `x-www-form-urlencoded`, the body is automatically form-encoded before sending.
 
-#### Phase 2: Expected Response
+#### Phase 3: Then (Expected Response)
 
 Define what the AUT should respond with.
 
-| Builder Method                            | Description                                       |
-|-------------------------------------------|---------------------------------------------------|
-| `response(status, body, headers)`         | Assert response contains the given subset          |
-| `exactResponseBody(status, body, headers)`| Assert response body matches exactly (deep equal)  |
+| Builder Method                                 | Description                                       |
+|------------------------------------------------|---------------------------------------------------|
+| `expectResponse(status, body, headers)`        | Assert response contains the given subset         |
+| `expectExactResponse(status, body, headers)`   | Assert response body matches exactly (deep equal) |
 
 - **Subset matching** (default): The actual response body must contain all
   fields specified in the expected body, but may contain additional fields.
@@ -90,16 +106,6 @@ Define what the AUT should respond with.
   string and the XML-as-JSON representation are made available. If parsing
   fails, the original string is used as-is.
 
-#### Phase 3: Stubs
-
-Provide an array of stubs representing the AUT's downstream dependencies.
-
-| Builder Method   | Description                                 |
-|------------------|---------------------------------------------|
-| `stub(stubs[])`  | Register an array of downstream dependency stubs |
-
-An empty array is valid when the AUT endpoint has no downstream calls.
-
 #### Phase 4: Execution
 
 | Builder Method | Description                              |
@@ -107,67 +113,72 @@ An empty array is valid when the AUT endpoint has no downstream calls.
 | `run()`        | Execute the test (async). Returns the raw application response. |
 
 Execution proceeds as:
-1. Initialize all stubs on the mock server (in parallel).
+1. Initialize all downstreams on the mock server (in parallel).
 2. Send the HTTP request to the AUT.
-3. Collect call data from each stub (in parallel).
+3. Collect call data from each downstream (in parallel).
 4. Run all assertions.
+5. Reset builder state for the next test.
 
-### 1.4 Stub Behavior
+### 1.4 Downstream Behavior
 
-A stub represents a single downstream HTTP endpoint that the AUT calls during
-the test. Stubs are created via factory methods and configured with a fluent API.
+A downstream represents a single external HTTP endpoint that the AUT calls
+during the test. Downstreams are created via factory methods and configured
+with a fluent API.
 
-#### Creating Stubs
+#### Creating Downstreams
 
-| Factory Method                          | Description                          |
-|-----------------------------------------|--------------------------------------|
-| `restStub.get(status, path, body, headers)`    | Stub a GET endpoint            |
-| `restStub.post(status, path, body, headers)`   | Stub a POST endpoint           |
-| `restStub.put(status, path, body, headers)`    | Stub a PUT endpoint            |
-| `restStub.delete(status, path, body, headers)` | Stub a DELETE endpoint         |
+Downstreams are created using the `downstream` factory, specifying the HTTP
+method and path, then the response via `.returns()`:
 
-- `status` is the HTTP status code the stub returns.
-- `path` is the URL path the stub matches. It may be a full URL
+| Factory + Response                                         | Description                |
+|------------------------------------------------------------|----------------------------|
+| `downstream.get(path).returns(status, body, headers)`      | Mock a GET endpoint        |
+| `downstream.post(path).returns(status, body, headers)`     | Mock a POST endpoint       |
+| `downstream.put(path).returns(status, body, headers)`      | Mock a PUT endpoint        |
+| `downstream.delete(path).returns(status, body, headers)`   | Mock a DELETE endpoint     |
+
+- `path` is the URL path the downstream matches. It may be a full URL
   (e.g., `http://example.com/api/foo`) or a relative path (`/api/foo`).
   Query parameters in the path are extracted and matched separately.
-- `body` is the response body the stub returns (object or string).
+- `status` is the HTTP status code the downstream returns.
+- `body` is the response body the downstream returns (object or string).
 - `headers` are optional response headers.
 
-#### Stub Modifiers
+#### Downstream Modifiers
 
 | Modifier                             | Description                                          |
 |--------------------------------------|------------------------------------------------------|
-| `.times(n)`                          | Expect the stub to be called exactly `n` times       |
-| `.never()`                           | Expect the stub to never be called (0 times)         |
-| `.always()`                          | Allow the stub to be called any number of times      |
-| `.optional()`                        | Do not fail the test if this stub is not called       |
+| `.times(n)`                          | Expect the downstream to be called exactly `n` times |
+| `.never()`                           | Expect the downstream to never be called (0 times)   |
+| `.always()`                          | Allow the downstream to be called any number of times|
+| `.optional()`                        | Do not fail the test if this downstream is not called |
 | `.expect(body, headers)`            | Spy on the request: assert the AUT sent the given body and headers |
 | `.when(body, headers)`              | Conditional matching: only respond when the request body and headers match |
-| `.config(options)`                   | Override stub options (advanced)                     |
 
 #### Call Count Enforcement
 
-By default, every stub is expected to be called **exactly once**. The framework
-enforces this after the AUT responds:
+By default, every downstream is expected to be called **exactly once**. The
+framework enforces this after the AUT responds:
 
-- If a required stub was called a different number of times than expected, the
-  test fails with a descriptive error listing the expected vs actual call count.
-- `.optional()` stubs are exempt from call-count enforcement.
-- `.always()` stubs disable call-count enforcement (the stub is registered
-  without a times limit on the mock server).
+- If a required downstream was called a different number of times than expected,
+  the test fails with a descriptive error listing the expected vs actual count.
+- `.optional()` downstreams are exempt from call-count enforcement.
+- `.always()` downstreams disable call-count enforcement (the downstream is
+  registered without a times limit on the mock server).
 
-#### Conditional Stubs (`.when()`)
+#### Conditional Downstreams (`.when()`)
 
-Multiple stubs can be registered for the same path. When `.when(body, headers)`
-is used, the mock server applies strict matching: it only responds when the
-incoming request's JSON body includes the specified fields and the headers match.
-This enables testing endpoints where the AUT makes multiple calls to the same
-downstream URL with different payloads, receiving different responses.
+Multiple downstreams can be registered for the same path. When
+`.when(body, headers)` is used, the mock server applies strict matching: it only
+responds when the incoming request's JSON body includes the specified fields and
+the headers match. This enables testing endpoints where the AUT makes multiple
+calls to the same downstream URL with different payloads, receiving different
+responses.
 
 #### Request Spying (`.expect()`)
 
-When `.expect(body, headers)` is set on a stub, the framework captures the
-first request the stub receives and asserts:
+When `.expect(body, headers)` is set on a downstream, the framework captures
+the first request the downstream receives and asserts:
 
 - The request headers contain the expected headers (subset match).
 - The request body contains the expected body (subset match). String bodies are
@@ -180,19 +191,32 @@ values for debugging.
 
 After the AUT responds, the framework runs assertions in this order:
 
-1. **Stub request assertions** - For each stub with `.expect()`, verify the
-   request headers and body.
-2. **Call count assertions** - For each required stub with a defined expected
-   call count, verify it was called the right number of times.
+1. **Downstream request assertions** - For each downstream with `.expect()`,
+   verify the request headers and body.
+2. **Call count assertions** - For each required downstream with a defined
+   expected call count, verify it was called the right number of times.
 3. **Unmatched request check** - If any outbound requests from the AUT did not
-   match a registered stub, fail with a list of unmatched paths.
+   match a registered downstream, fail with a list of unmatched paths.
 4. **Response assertion** - Verify the AUT's response status, headers, and body
    match the expected values (subset or exact depending on the builder method).
 
-All stub-related errors are collected and printed before the response assertion
-runs, so the test author sees all failures at once rather than one at a time.
+All downstream-related errors are collected and printed before the response
+assertion runs, so the test author sees all failures at once rather than one at
+a time.
 
-### 1.6 Proxy Architecture
+### 1.6 Fixtures
+
+Test data (request/response payloads) can be stored in external files and
+loaded via the `fixture()` helper. This keeps test definitions concise and
+separates data from test logic.
+
+- `fixture(path)` reads a file relative to a configurable base directory
+  (default: `test/fixtures`).
+- JSON files (`.json` extension) are automatically parsed into objects.
+- All other files are returned as plain strings (suitable for XML, HTML, etc.).
+- The base directory can be changed via `setFixturePath(newBasePath)`.
+
+### 1.7 Proxy Architecture
 
 The framework uses an HTTP proxy to intercept the AUT's outbound traffic:
 
@@ -223,13 +247,14 @@ The framework uses an HTTP proxy to intercept the AUT's outbound traffic:
 
 ```
 lib/
-  index.js          - Public API: exports gangster, stubs, setup(), teardown()
+  index.js          - Public API: exports gangster, downstream, fixture, setup(), teardown()
   gangster.js       - Gangster class (fluent builder + HTTP client)
   assert.js         - Assertion engine
   config.js         - Configuration loader (app domain, ports)
+  fixture.js        - Fixture file loading helper
   helpers.js        - Test utilities (mockDateTime, loadFile, loadJson)
   stubs/
-    index.js        - Stub factory functions
+    index.js        - Downstream and stub factory functions
     RestStub.js     - RestStub class + mock server management
   utils/
     HeaderUtils.js  - Base64 and Basic Auth encoding/decoding
@@ -241,27 +266,31 @@ lib/
 
 #### Exports from `lib/index.js`
 
-| Export       | Type     | Description                                     |
-|--------------|----------|-------------------------------------------------|
-| `gangster`   | Object   | Singleton `Gangster` instance for building tests |
-| `stubs`      | Object   | Stub factories (`stubs.restStub.get(...)`, etc.) |
-| `setup()`    | Function | Start mock server and configure proxy            |
-| `teardown()` | Function | Stop mock server                                 |
+| Export             | Type     | Description                                          |
+|--------------------|----------|------------------------------------------------------|
+| `gangster`         | Object   | Singleton `Gangster` instance for building tests     |
+| `downstream`       | Object   | Downstream factory (`downstream.get(path)`, etc.)    |
+| `fixture`          | Function | Load test data from a fixture file                   |
+| `setFixturePath`   | Function | Configure the fixture base directory                 |
+| `stubs`            | Object   | Legacy stub factories (backward compatible)          |
+| `setup()`          | Function | Start mock server and configure proxy                |
+| `teardown()`       | Function | Stop mock server                                     |
 
 #### `Gangster` Class (`lib/gangster.js`)
 
 The singleton `gangster` object is reused across tests. Each test overwrites
 its properties via the builder methods. The `run()` method:
 
-1. Calls `init()` on every stub (registers it with mockttp).
+1. Calls `init()` on every downstream (registers it with mockttp).
 2. Calls `callApplication()` which builds an Axios request with:
    - Parsed Basic auth from the `authorization` header (if present).
    - Form-encoded body when `Content-Type` includes `x-www-form-urlencoded`.
    - `proxy: null` to prevent Axios from inheriting the global proxy
      (the proxy is handled at the process level by global-agent).
    - `validateStatus: () => true` so non-2xx responses don't throw.
-3. Calls `spy()` on every stub to collect request data.
+3. Calls `spy()` on every downstream to collect request data.
 4. Passes everything to `assert()`.
+5. Resets downstream state for the next test.
 
 #### `RestStub` Class (`lib/stubs/RestStub.js`)
 
@@ -269,12 +298,17 @@ Each `RestStub` instance holds:
 
 | Property          | Default   | Description                            |
 |-------------------|-----------|----------------------------------------|
-| `expectedTimes`   | `1`       | How many times the stub should be called |
+| `expectedTimes`   | `1`       | How many times the downstream should be called |
 | `options.requiredCall` | `true` | Whether call-count is enforced        |
 | `options.strictMatching` | `false` | Whether to show strict error messages |
 | `enableSpy`       | `false`   | Whether `.expect()` assertions are active |
 
+Construction supports two patterns:
+- **New (two-phase)**: `new RestStub(method, path)` followed by `.returns(status, body, headers)`
+- **Legacy (single-phase)**: `new RestStub(method, path, status, body, headers)`
+
 The `init()` method registers the endpoint on the mockttp server:
+- Validates that a response has been defined (via constructor or `.returns()`).
 - Builds a matcher for the HTTP method, path, and query.
 - If `.when()` was used, adds `withJsonBodyIncluding()` and `withHeaders()`
   matchers for conditional routing.
@@ -286,11 +320,17 @@ The `spy()` method retrieves seen requests from mockttp and returns structured
 data including the first request's headers, body (JSON or form data), and raw
 body string.
 
+#### `fixture()` Function (`lib/fixture.js`)
+
+Synchronously loads test data from a file. JSON files are parsed automatically;
+all other files are returned as strings. The base directory defaults to
+`test/fixtures` and can be changed via `setFixturePath()`.
+
 #### `assert()` Function (`lib/assert.js`)
 
 Uses `chai.expect` with `chai-subset`'s `.containSubset()` for all subset
-matching. Errors from stub assertions are collected into an array, printed to
-console, and then asserted to be empty at the end.
+matching. Errors from downstream assertions are collected into an array, printed
+to console, and then asserted to be empty at the end.
 
 The `enrichResponseAndCallData()` helper mutates response and expected data
 in-place: if either is a string, it attempts XML-to-JSON conversion and wraps
@@ -351,22 +391,43 @@ errors rather than propagating them.
 A test suite is expected to follow this pattern:
 
 ```javascript
-import { setup, teardown, gangster, stubs } from 'chai-gangster';
+import { setup, teardown, gangster, downstream, fixture, setFixturePath } from 'chai-gangster';
 
 describe('My Component Test', () => {
-  before(()  => startMyApp());       // author's responsibility
-  after(()   => stopMyApp());        // author's responsibility
-  beforeEach(() => setup());         // starts mock server + proxy
-  afterEach(()  => teardown());      // stops mock server
+  before(() => {
+    setFixturePath('test/fixtures');
+    startMyApp();                      // author's responsibility
+  });
+  after(()   => stopMyApp());          // author's responsibility
+  beforeEach(() => setup());           // starts mock server + proxy
+  afterEach(()  => teardown());        // stops mock server
 
-  it('does something', async () => {
+  it('returns data from a downstream service', async () => {
     await gangster
-      .get('/my-endpoint', { 'Content-Type': 'application/json' })
-      .response(200, { key: 'value' }, {})
-      .stub([
-        stubs.restStub.get(200, 'http://dep.com/api', { data: 'mocked' }),
+      .given([
+        downstream.get('http://dep.com/api').returns(200, fixture('dep/response.json')),
       ])
+      .get('/my-endpoint', { 'Content-Type': 'application/json' })
+      .expectResponse(200, fixture('my-endpoint/expected.json'))
+      .run();
+  });
+
+  it('works without downstreams', async () => {
+    await gangster
+      .get('/health')
+      .expectResponse(200, { status: 'ok' })
       .run();
   });
 });
 ```
+
+### 2.6 Backward Compatibility
+
+The following legacy methods remain functional as aliases:
+
+| Legacy                                        | New Equivalent                                   |
+|-----------------------------------------------|--------------------------------------------------|
+| `restStub.get(status, path, body, headers)`   | `downstream.get(path).returns(status, body, headers)` |
+| `.stub(downstreams[])`                        | `.given(downstreams[])`                          |
+| `.response(status, body, headers)`            | `.expectResponse(status, body, headers)`         |
+| `.exactResponseBody(status, body, headers)`   | `.expectExactResponse(status, body, headers)`    |
